@@ -77,7 +77,7 @@ export function RegistrosList({ list }: { list: Commission[] }) {
               <div className="flex-1 min-w-0">
                 <p className="font-display font-bold">{fmtBRL(c.value)}</p>
                 <p className="text-xs text-muted-foreground truncate">
-                  {[c.category, c.client, c.note].filter(Boolean).join(" · ") || fmtDate(c.date, "EEEE")}
+                  {c.note || fmtDate(c.date, "EEEE")}
                 </p>
               </div>
               <Button size="icon" variant="ghost" onClick={() => setEditing(c)}><Pencil className="h-4 w-4" /></Button>
