@@ -81,16 +81,7 @@ export function CommissionForm({ editing, onDone, defaultDate }: Props) {
         </Popover>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="cat">Categoria</Label>
-          <Input id="cat" placeholder="Ex.: Plano Premium" value={category} onChange={(e) => setCategory(e.target.value)} className="bg-background/40" />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="cli">Cliente / Venda</Label>
-          <Input id="cli" placeholder="Ex.: Loja XYZ" value={client} onChange={(e) => setClient(e.target.value)} className="bg-background/40" />
-        </div>
-      </div>
+
 
       <div className="space-y-2">
         <Label htmlFor="note">Observações</Label>
