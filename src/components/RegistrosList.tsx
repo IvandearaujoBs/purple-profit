@@ -21,7 +21,7 @@ export function RegistrosList({ list }: { list: Commission[] }) {
   const filtered = useMemo(() => {
     return list
       .filter((c) => {
-        const text = `${c.note ?? ""} ${c.category ?? ""} ${c.client ?? ""}`.toLowerCase();
+        const text = (c.note ?? "").toLowerCase();
         if (q && !text.includes(q.toLowerCase())) return false;
         if (from && c.date < from) return false;
         if (to && c.date > to) return false;
