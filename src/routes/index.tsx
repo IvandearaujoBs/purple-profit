@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Wallet, LayoutDashboard, CalendarRange, ListChecks, FileBarChart2 } from "lucide-react";
+import { Wallet, LayoutDashboard, CalendarRange, ListChecks, FileBarChart2, LogOut } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { useCommissions } from "@/hooks/use-commissions";
 import { MonthSelector } from "@/components/MonthSelector";
 import { SummaryCards } from "@/components/SummaryCards";
@@ -11,6 +12,8 @@ import { CommissionCharts } from "@/components/CommissionCharts";
 import { CommissionCalendar } from "@/components/CommissionCalendar";
 import { RegistrosList } from "@/components/RegistrosList";
 import { MonthlyReport } from "@/components/MonthlyReport";
+import { AuthGate } from "@/components/AuthGate";
+import { getSession, logout } from "@/lib/auth";
 
 export const Route = createFileRoute("/")({
   head: () => ({
