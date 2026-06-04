@@ -18,12 +18,10 @@ export function CommissionForm({ editing, onDone, defaultDate }: Props) {
   const [value, setValue] = useState(editing ? String(editing.value) : "");
   const [date, setDate] = useState<Date>(editing ? new Date(editing.date) : defaultDate ?? new Date());
   const [note, setNote] = useState(editing?.note ?? "");
-  const [category, setCategory] = useState(editing?.category ?? "");
-  const [client, setClient] = useState(editing?.client ?? "");
   const [open, setOpen] = useState(false);
 
   const reset = () => {
-    setValue(""); setNote(""); setCategory(""); setClient(""); setDate(new Date());
+    setValue(""); setNote(""); setDate(new Date());
   };
 
   const submit = (e: React.FormEvent) => {
@@ -38,8 +36,6 @@ export function CommissionForm({ editing, onDone, defaultDate }: Props) {
       value: num,
       date: format(date, "yyyy-MM-dd"),
       note: note || undefined,
-      category: category || undefined,
-      client: client || undefined,
     });
     toast.success(editing ? "Comissão atualizada" : "Comissão adicionada");
     if (!editing) reset();
@@ -85,16 +81,7 @@ export function CommissionForm({ editing, onDone, defaultDate }: Props) {
         </Popover>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="cat">Categoria</Label>
-          <Input id="cat" placeholder="Ex.: Plano Premium" value={category} onChange={(e) => setCategory(e.target.value)} className="bg-background/40" />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="cli">Cliente / Venda</Label>
-          <Input id="cli" placeholder="Ex.: Loja XYZ" value={client} onChange={(e) => setClient(e.target.value)} className="bg-background/40" />
-        </div>
-      </div>
+
 
       <div className="space-y-2">
         <Label htmlFor="note">Observações</Label>

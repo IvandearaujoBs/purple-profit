@@ -21,7 +21,7 @@ export function RegistrosList({ list }: { list: Commission[] }) {
   const filtered = useMemo(() => {
     return list
       .filter((c) => {
-        const text = `${c.note ?? ""} ${c.category ?? ""} ${c.client ?? ""}`.toLowerCase();
+        const text = (c.note ?? "").toLowerCase();
         if (q && !text.includes(q.toLowerCase())) return false;
         if (from && c.date < from) return false;
         if (to && c.date > to) return false;
@@ -39,7 +39,7 @@ export function RegistrosList({ list }: { list: Commission[] }) {
       <div className="glass-card rounded-3xl p-5 space-y-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar por cliente, categoria ou observação…" value={q} onChange={(e) => setQ(e.target.value)} className="pl-9 bg-background/40" />
+          <Input placeholder="Buscar por observação…" value={q} onChange={(e) => setQ(e.target.value)} className="pl-9 bg-background/40" />
         </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <div className="space-y-1">
@@ -77,7 +77,7 @@ export function RegistrosList({ list }: { list: Commission[] }) {
               <div className="flex-1 min-w-0">
                 <p className="font-display font-bold">{fmtBRL(c.value)}</p>
                 <p className="text-xs text-muted-foreground truncate">
-                  {[c.category, c.client, c.note].filter(Boolean).join(" · ") || fmtDate(c.date, "EEEE")}
+                  {c.note || fmtDate(c.date, "EEEE")}
                 </p>
               </div>
               <Button size="icon" variant="ghost" onClick={() => setEditing(c)}><Pencil className="h-4 w-4" /></Button>

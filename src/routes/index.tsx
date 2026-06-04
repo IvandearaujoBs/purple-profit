@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Wallet, LayoutDashboard, CalendarRange, ListChecks, FileBarChart2 } from "lucide-react";
+import { Wallet, LayoutDashboard, CalendarRange, ListChecks, FileBarChart2, LogOut } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
 import { useCommissions } from "@/hooks/use-commissions";
 import { MonthSelector } from "@/components/MonthSelector";
 import { SummaryCards } from "@/components/SummaryCards";
@@ -11,6 +12,8 @@ import { CommissionCharts } from "@/components/CommissionCharts";
 import { CommissionCalendar } from "@/components/CommissionCalendar";
 import { RegistrosList } from "@/components/RegistrosList";
 import { MonthlyReport } from "@/components/MonthlyReport";
+import { AuthGate } from "@/components/AuthGate";
+import { getSession, logout } from "@/lib/auth";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -25,24 +28,37 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
+  return (
+    <AuthGate>
+      <Dashboard />
+    </AuthGate>
+  );
+}
+
+function Dashboard() {
   const [month, setMonth] = useState<Date>(new Date());
   const today = new Date();
   const list = useCommissions();
+  const user = getSession();
 
   return (
     <div className="mx-auto min-h-screen w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-10">
-      <header className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent glow-primary">
+      <header className="mb-6 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent glow-primary shrink-0">
             <Wallet className="h-5 w-5 text-primary-foreground" />
           </div>
-          <div>
-            <h1 className="font-display text-2xl font-extrabold leading-none">
+          <div className="min-w-0">
+            <h1 className="font-display text-2xl font-extrabold leading-none truncate">
               Comissão <span className="text-gradient">Pro</span>
             </h1>
-            <p className="text-xs text-muted-foreground">Controle diário de comissões</p>
+            <p className="text-xs text-muted-foreground truncate">Olá, {user}</p>
           </div>
         </div>
+        <Button variant="outline" size="sm" onClick={logout} className="rounded-xl shrink-0">
+          <LogOut className="h-4 w-4 sm:mr-1.5" />
+          <span className="hidden sm:inline">Sair</span>
+        </Button>
       </header>
 
       <div className="mb-5">
