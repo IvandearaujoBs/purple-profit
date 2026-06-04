@@ -18,12 +18,10 @@ export function CommissionForm({ editing, onDone, defaultDate }: Props) {
   const [value, setValue] = useState(editing ? String(editing.value) : "");
   const [date, setDate] = useState<Date>(editing ? new Date(editing.date) : defaultDate ?? new Date());
   const [note, setNote] = useState(editing?.note ?? "");
-  const [category, setCategory] = useState(editing?.category ?? "");
-  const [client, setClient] = useState(editing?.client ?? "");
   const [open, setOpen] = useState(false);
 
   const reset = () => {
-    setValue(""); setNote(""); setCategory(""); setClient(""); setDate(new Date());
+    setValue(""); setNote(""); setDate(new Date());
   };
 
   const submit = (e: React.FormEvent) => {
