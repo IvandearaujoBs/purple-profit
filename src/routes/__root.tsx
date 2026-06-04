@@ -77,8 +77,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
       { name: "theme-color", content: "#1a1340" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "apple-mobile-web-app-title", content: "Comissão Pro" },
+      { name: "mobile-web-app-capable", content: "yes" },
       { title: "Comissão Pro" },
       { name: "description", content: "Controle moderno de comissões diárias com dashboard, calendário e relatórios." },
       { property: "og:title", content: "Comissão Pro" },
