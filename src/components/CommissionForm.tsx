@@ -36,8 +36,6 @@ export function CommissionForm({ editing, onDone, defaultDate }: Props) {
       value: num,
       date: format(date, "yyyy-MM-dd"),
       note: note || undefined,
-      category: category || undefined,
-      client: client || undefined,
     });
     toast.success(editing ? "Comissão atualizada" : "Comissão adicionada");
     if (!editing) reset();
