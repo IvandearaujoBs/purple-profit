@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { Wallet, LayoutDashboard, CalendarRange, ListChecks, FileBarChart2, LogOut } from "lucide-react";
+import { Wallet, LayoutDashboard, CalendarRange, ListChecks, FileBarChart2, LogOut, ShoppingBag } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { useCommissions } from "@/hooks/use-commissions";
+import { useExpenses } from "@/hooks/use-expenses";
 import { MonthSelector } from "@/components/MonthSelector";
 import { SummaryCards } from "@/components/SummaryCards";
 import { CommissionForm } from "@/components/CommissionForm";
@@ -12,6 +13,8 @@ import { CommissionCharts } from "@/components/CommissionCharts";
 import { CommissionCalendar } from "@/components/CommissionCalendar";
 import { RegistrosList } from "@/components/RegistrosList";
 import { MonthlyReport } from "@/components/MonthlyReport";
+import { ExpenseForm } from "@/components/ExpenseForm";
+import { ExpensesList } from "@/components/ExpensesList";
 import { AuthGate } from "@/components/AuthGate";
 import { getSession, logout } from "@/lib/auth";
 
@@ -39,6 +42,7 @@ function Dashboard() {
   const [month, setMonth] = useState<Date>(new Date());
   const today = new Date();
   const list = useCommissions();
+  const expenses = useExpenses();
   const user = getSession();
 
   return (

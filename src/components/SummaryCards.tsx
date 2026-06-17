@@ -1,7 +1,8 @@
-import { TrendingDown, TrendingUp, CalendarDays, Trophy, Hash, Coins } from "lucide-react";
+import { TrendingDown, TrendingUp, CalendarDays, Trophy, Hash, Coins, ShoppingBag, Wallet } from "lucide-react";
 import { fmtBRL, fmtDate, monthStats, prevMonthDelta, type Commission } from "@/lib/commissions";
+import { expensesMonthTotal, type Expense } from "@/lib/expenses";
 
-type Props = { list: Commission[]; ref: Date; today: Date };
+type Props = { list: Commission[]; expenses?: Expense[]; ref: Date; today: Date };
 
 function Stat({
   icon: Icon, label, value, accent, sub,
@@ -20,24 +21,40 @@ function Stat({
   );
 }
 
-export function SummaryCards({ list, ref, today }: Props) {
+export function SummaryCards({ list, expenses = [], ref, today }: Props) {
   const s = monthStats(list, ref);
   const todayKey = today.toISOString().slice(0, 10);
   const todayTotal = list.filter((c) => c.date === todayKey).reduce((a, c) => a + c.value, 0);
   const delta = prevMonthDelta(list, ref);
   const up = delta >= 0;
+  const consumo = expensesMonthTotal(expenses, ref);
+  const liquido = s.total - consumo;
 
   return (
     <div className="space-y-3">
       <div className="glass-card glow-primary rounded-3xl p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-widest text-muted-foreground">Total do mês</p>
-            <p className="mt-1 font-display text-4xl font-extrabold text-gradient">{fmtBRL(s.total)}</p>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground">Líquido do mês</p>
+            <p className="mt-1 font-display text-4xl font-extrabold text-gradient truncate">{fmtBRL(liquido)}</p>
           </div>
-          <div className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ${up ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"}`}>
+          <div className={`flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold shrink-0 ${up ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"}`}>
             {up ? <TrendingUp className="h-3.5 w-3.5" /> : <TrendingDown className="h-3.5 w-3.5" />}
             {up ? "+" : ""}{delta.toFixed(1)}%
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <div className="rounded-2xl bg-success/10 p-3">
+            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-success">
+              <Wallet className="h-3 w-3" /> Bruto
+            </div>
+            <p className="mt-1 font-display text-lg font-bold text-success">{fmtBRL(s.total)}</p>
+          </div>
+          <div className="rounded-2xl bg-destructive/10 p-3">
+            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wider text-destructive">
+              <ShoppingBag className="h-3 w-3" /> Consumo
+            </div>
+            <p className="mt-1 font-display text-lg font-bold text-destructive">-{fmtBRL(consumo)}</p>
           </div>
         </div>
         <p className="mt-2 text-xs text-muted-foreground">vs. mês anterior</p>
