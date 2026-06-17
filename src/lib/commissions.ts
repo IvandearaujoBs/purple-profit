@@ -16,12 +16,19 @@ export type Commission = {
   updatedAt: string;
 };
 
-const KEY = "commission-pro:v1";
+import { getSession } from "@/lib/auth";
+
+function userKey(): string | null {
+  const u = getSession();
+  return u ? `commission-pro:u:${u}:v1` : null;
+}
 
 export function loadAll(): Commission[] {
   if (typeof window === "undefined") return [];
+  const key = userKey();
+  if (!key) return [];
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(key);
     return raw ? (JSON.parse(raw) as Commission[]) : [];
   } catch {
     return [];
@@ -29,7 +36,9 @@ export function loadAll(): Commission[] {
 }
 
 export function saveAll(list: Commission[]) {
-  localStorage.setItem(KEY, JSON.stringify(list));
+  const key = userKey();
+  if (!key) return;
+  localStorage.setItem(key, JSON.stringify(list));
   window.dispatchEvent(new CustomEvent("commissions:changed"));
 }
 
