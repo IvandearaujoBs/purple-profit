@@ -12,8 +12,8 @@ export function MonthlyReport({ list, ref }: { list: Commission[]; ref: Date }) 
 
   const exportCSV = () => {
     const rows = [
-      ["Data", "Valor", "Categoria", "Cliente", "Observação"],
-      ...items.map((c) => [c.date, c.value.toFixed(2), c.category ?? "", c.client ?? "", c.note ?? ""]),
+      ["Data", "Valor", "Observação"],
+      ...items.map((c) => [c.date, c.value.toFixed(2), c.note ?? ""]),
     ];
     const csv = rows.map((r) => r.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(",")).join("\n");
     const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
@@ -22,7 +22,7 @@ export function MonthlyReport({ list, ref }: { list: Commission[]; ref: Date }) 
 
   const exportXLSX = () => {
     const ws = XLSX.utils.json_to_sheet(items.map((c) => ({
-      Data: c.date, Valor: c.value, Categoria: c.category ?? "", Cliente: c.client ?? "", Observação: c.note ?? "",
+      Data: c.date, Valor: c.value, Observação: c.note ?? "",
     })));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Comissões");
@@ -36,13 +36,14 @@ export function MonthlyReport({ list, ref }: { list: Commission[]; ref: Date }) 
     doc.text(`Total: ${fmtBRL(s.total)} · Média diária: ${fmtBRL(s.avg)} · Registros: ${s.count}`, 14, 26);
     autoTable(doc, {
       startY: 32,
-      head: [["Data", "Valor", "Categoria", "Cliente", "Observação"]],
-      body: items.map((c) => [fmtDate(c.date), fmtBRL(c.value), c.category ?? "", c.client ?? "", c.note ?? ""]),
+      head: [["Data", "Valor", "Observação"]],
+      body: items.map((c) => [fmtDate(c.date), fmtBRL(c.value), c.note ?? ""]),
       styles: { fontSize: 9 },
       headStyles: { fillColor: [88, 50, 180] },
     });
     doc.save(`comissoes-${monthLabel}.pdf`);
   };
+
 
   return (
     <div className="space-y-4">
