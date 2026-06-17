@@ -1,164 +1,95 @@
-const USERS_KEY = "commission-pro:users";
-const SESSION_KEY = "commission-pro:session";
+import { supabase } from "@/integrations/supabase/client";
 
-const PBKDF2_ITERS = 150_000;
+let currentEmail: string | null = null;
+let initialized = false;
 
-export type User = {
-  username: string;
-  passwordHash: string; // base64(salt):base64(derivedKey)
-  token: string;
-  createdAt: string;
-};
-
-type SessionData = { username: string; token: string };
-
-function randomBytes(n: number): Uint8Array {
-  const out = new Uint8Array(n);
-  if (typeof crypto !== "undefined" && "getRandomValues" in crypto) {
-    crypto.getRandomValues(out);
-  } else {
-    for (let i = 0; i < n; i++) out[i] = Math.floor(Math.random() * 256);
-  }
-  return out;
-}
-
-function toB64(bytes: Uint8Array): string {
-  let s = "";
-  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
-  return btoa(s);
-}
-
-function fromB64(b64: string): Uint8Array {
-  const s = atob(b64);
-  const out = new Uint8Array(s.length);
-  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
-  return out;
-}
-
-function randomToken(): string {
-  return Array.from(randomBytes(32), (b) =>
-    b.toString(16).padStart(2, "0"),
-  ).join("");
-}
-
-async function deriveKey(password: string, salt: Uint8Array): Promise<Uint8Array> {
-  const enc = new TextEncoder().encode(password);
-  const keyMaterial = enc.buffer.slice(
-    enc.byteOffset,
-    enc.byteOffset + enc.byteLength,
-  ) as ArrayBuffer;
-  const saltBuf = salt.buffer.slice(
-    salt.byteOffset,
-    salt.byteOffset + salt.byteLength,
-  ) as ArrayBuffer;
-  const key = await crypto.subtle.importKey(
-    "raw",
-    keyMaterial,
-    { name: "PBKDF2" },
-    false,
-    ["deriveBits"],
-  );
-  const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", salt: saltBuf, iterations: PBKDF2_ITERS, hash: "SHA-256" },
-    key,
-    256,
-  );
-  return new Uint8Array(bits);
-}
-
-async function hashPassword(password: string): Promise<string> {
-  const salt = randomBytes(16);
-  const dk = await deriveKey(password, salt);
-  return `${toB64(salt)}:${toB64(dk)}`;
-}
-
-async function verifyPassword(password: string, stored: string): Promise<boolean> {
-  const [saltB64, dkB64] = stored.split(":");
-  if (!saltB64 || !dkB64) return false;
-  const dk = await deriveKey(password, fromB64(saltB64));
-  const want = fromB64(dkB64);
-  if (dk.length !== want.length) return false;
-  let diff = 0;
-  for (let i = 0; i < dk.length; i++) diff |= dk[i] ^ want[i];
-  return diff === 0;
-}
-
-export function loadUsers(): User[] {
-  if (typeof window === "undefined") return [];
-  try {
-    return JSON.parse(localStorage.getItem(USERS_KEY) || "[]");
-  } catch {
-    return [];
+function emit() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("auth:changed"));
   }
 }
 
-function saveUsers(u: User[]) {
-  localStorage.setItem(USERS_KEY, JSON.stringify(u));
+async function refresh(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  const email = data.session?.user?.email ?? null;
+  if (email !== currentEmail) {
+    currentEmail = email;
+    emit();
+  }
+  return currentEmail;
 }
 
-function readSessionRaw(): SessionData | null {
-  if (typeof window === "undefined") return null;
-  const raw = localStorage.getItem(SESSION_KEY);
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (
-      parsed &&
-      typeof parsed.username === "string" &&
-      typeof parsed.token === "string"
-    ) {
-      return parsed as SessionData;
+export function initAuth() {
+  if (initialized || typeof window === "undefined") return;
+  initialized = true;
+  void refresh();
+  supabase.auth.onAuthStateChange((_event, session) => {
+    const email = session?.user?.email ?? null;
+    if (email !== currentEmail) {
+      currentEmail = email;
+      emit();
     }
-  } catch {
-    // legacy plain-string sessions are no longer trusted
-  }
-  return null;
+  });
 }
 
 export function getSession(): string | null {
-  const s = readSessionRaw();
-  if (!s) return null;
-  const user = loadUsers().find((x) => x.username === s.username);
-  if (!user || !user.token || user.token !== s.token) {
-    localStorage.removeItem(SESSION_KEY);
-    return null;
+  return currentEmail;
+}
+
+export async function getUserId(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user?.id ?? null;
+}
+
+export async function login(email: string, password: string) {
+  const { error } = await supabase.auth.signInWithPassword({
+    email: email.trim().toLowerCase(),
+    password,
+  });
+  if (error) {
+    if (error.message.toLowerCase().includes("invalid")) {
+      throw new Error("Email ou senha inválidos");
+    }
+    throw new Error(error.message);
   }
-  return s.username;
+  await refresh();
 }
 
-function writeSession(username: string, token: string) {
-  localStorage.setItem(SESSION_KEY, JSON.stringify({ username, token }));
-  window.dispatchEvent(new CustomEvent("auth:changed"));
+export async function signup(email: string, password: string) {
+  const trimmed = email.trim().toLowerCase();
+  if (!trimmed || !password) throw new Error("Preencha email e senha");
+  if (password.length < 6) throw new Error("A senha deve ter no mínimo 6 caracteres");
+  const { error } = await supabase.auth.signUp({
+    email: trimmed,
+    password,
+    options: { emailRedirectTo: window.location.origin },
+  });
+  if (error) {
+    if (error.message.toLowerCase().includes("registered")) {
+      throw new Error("Este email já está cadastrado");
+    }
+    throw new Error(error.message);
+  }
+  await refresh();
 }
 
-export async function signup(username: string, password: string) {
-  const u = username.trim().toLowerCase();
-  if (!u || !password) throw new Error("Preencha usuário e senha");
-  if (password.length < 4) throw new Error("Senha deve ter no mínimo 4 caracteres");
-  const users = loadUsers();
-  if (users.find((x) => x.username === u)) throw new Error("Usuário já existe");
-  const token = randomToken();
-  const passwordHash = await hashPassword(password);
-  users.push({ username: u, passwordHash, token, createdAt: new Date().toISOString() });
-  saveUsers(users);
-  writeSession(u, token);
+export async function logout() {
+  await supabase.auth.signOut();
+  currentEmail = null;
+  emit();
 }
 
-export async function login(username: string, password: string) {
-  const u = username.trim().toLowerCase();
-  const users = loadUsers();
-  const idx = users.findIndex((x) => x.username === u);
-  const user = idx >= 0 ? users[idx] : null;
-  if (!user || !user.passwordHash) throw new Error("Usuário ou senha inválidos");
-  const ok = await verifyPassword(password, user.passwordHash);
-  if (!ok) throw new Error("Usuário ou senha inválidos");
-  const token = randomToken();
-  users[idx] = { ...user, token };
-  saveUsers(users);
-  writeSession(u, token);
+export async function sendPasswordReset(email: string) {
+  const trimmed = email.trim().toLowerCase();
+  if (!trimmed) throw new Error("Informe seu email");
+  const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
+    redirectTo: `${window.location.origin}/reset-password`,
+  });
+  if (error) throw new Error(error.message);
 }
 
-export function logout() {
-  localStorage.removeItem(SESSION_KEY);
-  window.dispatchEvent(new CustomEvent("auth:changed"));
+export async function updatePassword(newPassword: string) {
+  if (newPassword.length < 6) throw new Error("A senha deve ter no mínimo 6 caracteres");
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw new Error(error.message);
 }

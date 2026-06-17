@@ -4,60 +4,121 @@ import {
   differenceInCalendarWeeks, isWithinInterval,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { supabase } from "@/integrations/supabase/client";
+import { getSession, getUserId } from "@/lib/auth";
 
 export type Commission = {
   id: string;
   date: string; // ISO yyyy-MM-dd
   value: number;
   note?: string;
-  category?: string;
-  client?: string;
   createdAt: string;
   updatedAt: string;
 };
 
-import { getSession } from "@/lib/auth";
+let cache: Commission[] = [];
+let cacheUser: string | null = null;
 
-function userKey(): string | null {
-  const u = getSession();
-  return u ? `commission-pro:u:${u}:v1` : null;
+function emit() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("commissions:changed"));
+  }
+}
+
+function mapRow(r: any): Commission {
+  return {
+    id: r.id,
+    date: r.date,
+    value: Number(r.value),
+    note: r.note ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
 }
 
 export function loadAll(): Commission[] {
-  if (typeof window === "undefined") return [];
-  const key = userKey();
-  if (!key) return [];
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as Commission[]) : [];
-  } catch {
-    return [];
-  }
+  return cache;
 }
 
-export function saveAll(list: Commission[]) {
-  const key = userKey();
-  if (!key) return;
-  localStorage.setItem(key, JSON.stringify(list));
-  window.dispatchEvent(new CustomEvent("commissions:changed"));
+export async function fetchAll(): Promise<Commission[]> {
+  const email = getSession();
+  if (!email) { cache = []; cacheUser = null; emit(); return cache; }
+  if (cacheUser !== email) cache = [];
+  cacheUser = email;
+  await migrateLegacyIfNeeded();
+  const { data, error } = await supabase
+    .from("commissions")
+    .select("*")
+    .order("date", { ascending: false });
+  if (error) { console.error(error); return cache; }
+  cache = (data ?? []).map(mapRow);
+  emit();
+  return cache;
 }
 
-export function upsert(item: Omit<Commission, "createdAt" | "updatedAt" | "id"> & { id?: string }) {
-  const now = new Date().toISOString();
-  const list = loadAll();
+export async function upsert(
+  item: Omit<Commission, "createdAt" | "updatedAt" | "id"> & { id?: string },
+) {
+  const uid = await getUserId();
+  if (!uid) throw new Error("Não autenticado");
   if (item.id) {
-    const idx = list.findIndex((x) => x.id === item.id);
-    if (idx >= 0) {
-      list[idx] = { ...list[idx], ...item, id: item.id, updatedAt: now };
-    }
+    const { data, error } = await supabase
+      .from("commissions")
+      .update({ date: item.date, value: item.value, note: item.note ?? null })
+      .eq("id", item.id)
+      .select()
+      .single();
+    if (error) throw error;
+    cache = cache.map((c) => (c.id === item.id ? mapRow(data) : c));
   } else {
-    list.push({ ...item, id: crypto.randomUUID(), createdAt: now, updatedAt: now });
+    const { data, error } = await supabase
+      .from("commissions")
+      .insert({ user_id: uid, date: item.date, value: item.value, note: item.note ?? null })
+      .select()
+      .single();
+    if (error) throw error;
+    cache = [mapRow(data), ...cache];
   }
-  saveAll(list);
+  emit();
 }
 
-export function remove(id: string) {
-  saveAll(loadAll().filter((x) => x.id !== id));
+export async function remove(id: string) {
+  const { error } = await supabase.from("commissions").delete().eq("id", id);
+  if (error) throw error;
+  cache = cache.filter((c) => c.id !== id);
+  emit();
+}
+
+async function migrateLegacyIfNeeded() {
+  if (typeof window === "undefined") return;
+  const email = getSession();
+  if (!email) return;
+  const flag = `commission-pro:migrated:${email}:commissions`;
+  if (localStorage.getItem(flag)) return;
+  const uid = await getUserId();
+  if (!uid) return;
+  // Try all known local keys for this email + global legacy key
+  const keys = [`commission-pro:u:${email}:v1`, "commission-pro:v1"];
+  const seen = new Set<string>();
+  const toInsert: any[] = [];
+  for (const k of keys) {
+    const raw = localStorage.getItem(k);
+    if (!raw) continue;
+    try {
+      const items: Commission[] = JSON.parse(raw);
+      for (const it of items) {
+        const sig = `${it.date}|${it.value}|${it.note ?? ""}`;
+        if (seen.has(sig)) continue;
+        seen.add(sig);
+        toInsert.push({ user_id: uid, date: it.date, value: it.value, note: it.note ?? null });
+      }
+    } catch { /* ignore */ }
+  }
+  if (toInsert.length) {
+    const { error } = await supabase.from("commissions").insert(toInsert);
+    if (error) { console.error("Migração comissões:", error); return; }
+  }
+  localStorage.setItem(flag, "1");
 }
 
 export const fmtBRL = (n: number) =>
@@ -88,13 +149,9 @@ export function monthStats(list: Commission[], ref: Date) {
   items.forEach((c) => byDay.set(c.date, (byDay.get(c.date) ?? 0) + c.value));
   const days = Array.from(byDay.entries());
   const best = days.reduce<[string, number] | null>(
-    (acc, cur) => (!acc || cur[1] > acc[1] ? cur : acc),
-    null,
-  );
+    (acc, cur) => (!acc || cur[1] > acc[1] ? cur : acc), null);
   const worst = days.reduce<[string, number] | null>(
-    (acc, cur) => (!acc || cur[1] < acc[1] ? cur : acc),
-    null,
-  );
+    (acc, cur) => (!acc || cur[1] < acc[1] ? cur : acc), null);
   const { start, end } = monthRange(ref);
   const daysInMonth = eachDayOfInterval({ start, end }).length;
   const avg = total / daysInMonth;
@@ -116,11 +173,8 @@ export function weeklyBreakdown(list: Commission[], ref: Date) {
       return isWithinInterval(d, { start: clampedStart, end: clampedEnd });
     });
     weeks.push({
-      label: `Semana ${i + 1}`,
-      start: clampedStart,
-      end: clampedEnd,
-      total: items.reduce((s, c) => s + c.value, 0),
-      count: items.length,
+      label: `Semana ${i + 1}`, start: clampedStart, end: clampedEnd,
+      total: items.reduce((s, c) => s + c.value, 0), count: items.length,
     });
   }
   return weeks;

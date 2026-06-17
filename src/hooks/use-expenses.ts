@@ -1,18 +1,17 @@
 import { useEffect, useState } from "react";
-import { loadAllExpenses, type Expense } from "@/lib/expenses";
+import { fetchAllExpenses, loadAllExpenses, type Expense } from "@/lib/expenses";
 
 export function useExpenses() {
-  const [list, setList] = useState<Expense[]>([]);
+  const [list, setList] = useState<Expense[]>(loadAllExpenses());
   useEffect(() => {
-    setList(loadAllExpenses());
+    void fetchAllExpenses().then(setList);
     const onChange = () => setList(loadAllExpenses());
+    const onAuth = () => { void fetchAllExpenses().then(setList); };
     window.addEventListener("expenses:changed", onChange);
-    window.addEventListener("storage", onChange);
-    window.addEventListener("auth:changed", onChange);
+    window.addEventListener("auth:changed", onAuth);
     return () => {
       window.removeEventListener("expenses:changed", onChange);
-      window.removeEventListener("storage", onChange);
-      window.removeEventListener("auth:changed", onChange);
+      window.removeEventListener("auth:changed", onAuth);
     };
   }, []);
   return list;
