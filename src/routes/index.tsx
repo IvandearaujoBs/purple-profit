@@ -70,9 +70,12 @@ function Dashboard() {
       </div>
 
       <Tabs defaultValue="dashboard" className="space-y-5">
-        <TabsList className="glass-card grid w-full grid-cols-4 rounded-2xl p-1 h-12">
+        <TabsList className="glass-card grid w-full grid-cols-5 rounded-2xl p-1 h-12">
           <TabsTrigger value="dashboard" className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground gap-1.5">
             <LayoutDashboard className="h-4 w-4" /> <span className="hidden sm:inline">Dashboard</span>
+          </TabsTrigger>
+          <TabsTrigger value="consumos" className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground gap-1.5">
+            <ShoppingBag className="h-4 w-4" /> <span className="hidden sm:inline">Consumos</span>
           </TabsTrigger>
           <TabsTrigger value="calendario" className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-primary-foreground gap-1.5">
             <CalendarRange className="h-4 w-4" /> <span className="hidden sm:inline">Calendário</span>
@@ -86,13 +89,20 @@ function Dashboard() {
         </TabsList>
 
         <TabsContent value="dashboard" className="space-y-5">
-          <SummaryCards list={list} ref={month} today={today} />
+          <SummaryCards list={list} expenses={expenses} ref={month} today={today} />
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_360px]">
             <div className="space-y-5">
               <CommissionCharts list={list} ref={month} />
               <WeeklyBreakdown list={list} ref={month} />
             </div>
             <CommissionForm defaultDate={today} />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="consumos" className="space-y-5">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[360px_1fr]">
+            <ExpenseForm defaultDate={today} />
+            <ExpensesList list={expenses} />
           </div>
         </TabsContent>
 
