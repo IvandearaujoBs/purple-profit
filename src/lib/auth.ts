@@ -43,15 +43,23 @@ function randomToken(): string {
 
 async function deriveKey(password: string, salt: Uint8Array): Promise<Uint8Array> {
   const enc = new TextEncoder().encode(password);
+  const keyMaterial = enc.buffer.slice(
+    enc.byteOffset,
+    enc.byteOffset + enc.byteLength,
+  ) as ArrayBuffer;
+  const saltBuf = salt.buffer.slice(
+    salt.byteOffset,
+    salt.byteOffset + salt.byteLength,
+  ) as ArrayBuffer;
   const key = await crypto.subtle.importKey(
     "raw",
-    enc,
+    keyMaterial,
     { name: "PBKDF2" },
     false,
     ["deriveBits"],
   );
   const bits = await crypto.subtle.deriveBits(
-    { name: "PBKDF2", salt, iterations: PBKDF2_ITERS, hash: "SHA-256" },
+    { name: "PBKDF2", salt: saltBuf, iterations: PBKDF2_ITERS, hash: "SHA-256" },
     key,
     256,
   );
