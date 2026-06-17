@@ -28,11 +28,11 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (!ready) return null;
   if (session) return <>{children}</>;
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      if (mode === "login") login(u, p);
-      else { signup(u, p); toast.success("Conta criada!"); }
+      if (mode === "login") await login(u, p);
+      else { await signup(u, p); toast.success("Conta criada!"); }
     } catch (err) {
       toast.error((err as Error).message);
     }

@@ -1,22 +1,86 @@
 const USERS_KEY = "commission-pro:users";
 const SESSION_KEY = "commission-pro:session";
 
+const PBKDF2_ITERS = 150_000;
+
 export type User = {
   username: string;
-  password: string;
+  passwordHash: string; // base64(salt):base64(derivedKey)
   token: string;
   createdAt: string;
 };
 
 type SessionData = { username: string; token: string };
 
-function randomToken(): string {
+function randomBytes(n: number): Uint8Array {
+  const out = new Uint8Array(n);
   if (typeof crypto !== "undefined" && "getRandomValues" in crypto) {
-    const bytes = new Uint8Array(32);
-    crypto.getRandomValues(bytes);
-    return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    crypto.getRandomValues(out);
+  } else {
+    for (let i = 0; i < n; i++) out[i] = Math.floor(Math.random() * 256);
   }
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
+  return out;
+}
+
+function toB64(bytes: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+
+function fromB64(b64: string): Uint8Array {
+  const s = atob(b64);
+  const out = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+  return out;
+}
+
+function randomToken(): string {
+  return Array.from(randomBytes(32), (b) =>
+    b.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
+async function deriveKey(password: string, salt: Uint8Array): Promise<Uint8Array> {
+  const enc = new TextEncoder().encode(password);
+  const keyMaterial = enc.buffer.slice(
+    enc.byteOffset,
+    enc.byteOffset + enc.byteLength,
+  ) as ArrayBuffer;
+  const saltBuf = salt.buffer.slice(
+    salt.byteOffset,
+    salt.byteOffset + salt.byteLength,
+  ) as ArrayBuffer;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyMaterial,
+    { name: "PBKDF2" },
+    false,
+    ["deriveBits"],
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt: saltBuf, iterations: PBKDF2_ITERS, hash: "SHA-256" },
+    key,
+    256,
+  );
+  return new Uint8Array(bits);
+}
+
+async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16);
+  const dk = await deriveKey(password, salt);
+  return `${toB64(salt)}:${toB64(dk)}`;
+}
+
+async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  const [saltB64, dkB64] = stored.split(":");
+  if (!saltB64 || !dkB64) return false;
+  const dk = await deriveKey(password, fromB64(saltB64));
+  const want = fromB64(dkB64);
+  if (dk.length !== want.length) return false;
+  let diff = 0;
+  for (let i = 0; i < dk.length; i++) diff |= dk[i] ^ want[i];
+  return diff === 0;
 }
 
 export function loadUsers(): User[] {
@@ -55,8 +119,6 @@ export function getSession(): string | null {
   const s = readSessionRaw();
   if (!s) return null;
   const user = loadUsers().find((x) => x.username === s.username);
-  // Validate the session token matches the issued token. Tampering with
-  // localStorage (changing username, inventing a session) fails this check.
   if (!user || !user.token || user.token !== s.token) {
     localStorage.removeItem(SESSION_KEY);
     return null;
@@ -69,25 +131,27 @@ function writeSession(username: string, token: string) {
   window.dispatchEvent(new CustomEvent("auth:changed"));
 }
 
-export function signup(username: string, password: string) {
+export async function signup(username: string, password: string) {
   const u = username.trim().toLowerCase();
   if (!u || !password) throw new Error("Preencha usuário e senha");
   if (password.length < 4) throw new Error("Senha deve ter no mínimo 4 caracteres");
   const users = loadUsers();
   if (users.find((x) => x.username === u)) throw new Error("Usuário já existe");
   const token = randomToken();
-  users.push({ username: u, password, token, createdAt: new Date().toISOString() });
+  const passwordHash = await hashPassword(password);
+  users.push({ username: u, passwordHash, token, createdAt: new Date().toISOString() });
   saveUsers(users);
   writeSession(u, token);
 }
 
-export function login(username: string, password: string) {
+export async function login(username: string, password: string) {
   const u = username.trim().toLowerCase();
   const users = loadUsers();
   const idx = users.findIndex((x) => x.username === u);
   const user = idx >= 0 ? users[idx] : null;
-  if (!user || user.password !== password) throw new Error("Usuário ou senha inválidos");
-  // Rotate token on each login so old sessions can't be replayed.
+  if (!user || !user.passwordHash) throw new Error("Usuário ou senha inválidos");
+  const ok = await verifyPassword(password, user.passwordHash);
+  if (!ok) throw new Error("Usuário ou senha inválidos");
   const token = randomToken();
   users[idx] = { ...user, token };
   saveUsers(users);
