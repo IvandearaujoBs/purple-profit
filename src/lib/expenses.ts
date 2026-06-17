@@ -1,57 +1,120 @@
 import { parseISO, isWithinInterval, startOfMonth, endOfMonth } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
+import { getSession, getUserId } from "@/lib/auth";
 
 export type Expense = {
   id: string;
-  date: string; // yyyy-MM-dd
+  date: string;
   value: number;
-  name: string; // produto ou estabelecimento
+  name: string;
   note?: string;
   createdAt: string;
   updatedAt: string;
 };
 
-import { getSession } from "@/lib/auth";
+let cache: Expense[] = [];
+let cacheUser: string | null = null;
 
-function userKey(): string | null {
-  const u = getSession();
-  return u ? `commission-pro:u:${u}:expenses:v1` : null;
+function emit() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("expenses:changed"));
+  }
+}
+
+function mapRow(r: any): Expense {
+  return {
+    id: r.id,
+    date: r.date,
+    value: Number(r.value),
+    name: r.name,
+    note: r.note ?? undefined,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+  };
 }
 
 export function loadAllExpenses(): Expense[] {
-  if (typeof window === "undefined") return [];
-  const key = userKey();
-  if (!key) return [];
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as Expense[]) : [];
-  } catch {
-    return [];
-  }
+  return cache;
 }
 
-export function saveAllExpenses(list: Expense[]) {
-  const key = userKey();
-  if (!key) return;
-  localStorage.setItem(key, JSON.stringify(list));
-  window.dispatchEvent(new CustomEvent("expenses:changed"));
+export async function fetchAllExpenses(): Promise<Expense[]> {
+  const email = getSession();
+  if (!email) { cache = []; cacheUser = null; emit(); return cache; }
+  if (cacheUser !== email) cache = [];
+  cacheUser = email;
+  await migrateLegacyIfNeeded();
+  const { data, error } = await supabase
+    .from("expenses")
+    .select("*")
+    .order("date", { ascending: false });
+  if (error) { console.error(error); return cache; }
+  cache = (data ?? []).map(mapRow);
+  emit();
+  return cache;
 }
 
-export function upsertExpense(
+export async function upsertExpense(
   item: Omit<Expense, "createdAt" | "updatedAt" | "id"> & { id?: string },
 ) {
-  const now = new Date().toISOString();
-  const list = loadAllExpenses();
+  const uid = await getUserId();
+  if (!uid) throw new Error("Não autenticado");
   if (item.id) {
-    const idx = list.findIndex((x) => x.id === item.id);
-    if (idx >= 0) list[idx] = { ...list[idx], ...item, id: item.id, updatedAt: now };
+    const { data, error } = await supabase
+      .from("expenses")
+      .update({ date: item.date, value: item.value, name: item.name, note: item.note ?? null })
+      .eq("id", item.id)
+      .select()
+      .single();
+    if (error) throw error;
+    cache = cache.map((c) => (c.id === item.id ? mapRow(data) : c));
   } else {
-    list.push({ ...item, id: crypto.randomUUID(), createdAt: now, updatedAt: now });
+    const { data, error } = await supabase
+      .from("expenses")
+      .insert({ user_id: uid, date: item.date, value: item.value, name: item.name, note: item.note ?? null })
+      .select()
+      .single();
+    if (error) throw error;
+    cache = [mapRow(data), ...cache];
   }
-  saveAllExpenses(list);
+  emit();
 }
 
-export function removeExpense(id: string) {
-  saveAllExpenses(loadAllExpenses().filter((x) => x.id !== id));
+export async function removeExpense(id: string) {
+  const { error } = await supabase.from("expenses").delete().eq("id", id);
+  if (error) throw error;
+  cache = cache.filter((c) => c.id !== id);
+  emit();
+}
+
+async function migrateLegacyIfNeeded() {
+  if (typeof window === "undefined") return;
+  const email = getSession();
+  if (!email) return;
+  const flag = `commission-pro:migrated:${email}:expenses`;
+  if (localStorage.getItem(flag)) return;
+  const uid = await getUserId();
+  if (!uid) return;
+  const keys = [`commission-pro:u:${email}:expenses:v1`, "commission-pro:expenses:v1"];
+  const seen = new Set<string>();
+  const toInsert: any[] = [];
+  for (const k of keys) {
+    const raw = localStorage.getItem(k);
+    if (!raw) continue;
+    try {
+      const items: Expense[] = JSON.parse(raw);
+      for (const it of items) {
+        const sig = `${it.date}|${it.value}|${it.name}|${it.note ?? ""}`;
+        if (seen.has(sig)) continue;
+        seen.add(sig);
+        toInsert.push({ user_id: uid, date: it.date, value: it.value, name: it.name, note: it.note ?? null });
+      }
+    } catch { /* ignore */ }
+  }
+  if (toInsert.length) {
+    const { error } = await supabase.from("expenses").insert(toInsert);
+    if (error) { console.error("Migração consumos:", error); return; }
+  }
+  localStorage.setItem(flag, "1");
 }
 
 export function expensesInMonth(list: Expense[], ref: Date) {

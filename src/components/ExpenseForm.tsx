@@ -25,22 +25,27 @@ export function ExpenseForm({ editing, onDone, defaultDate }: Props) {
     setName(""); setValue(""); setNote(""); setDate(new Date());
   };
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) { toast.error("Informe o produto ou estabelecimento"); return; }
     const num = Number(value.replace(",", "."));
     if (!num || num <= 0) { toast.error("Informe um valor válido"); return; }
-    upsertExpense({
-      id: editing?.id,
-      name: name.trim(),
-      value: num,
-      date: format(date, "yyyy-MM-dd"),
-      note: note || undefined,
-    });
-    toast.success(editing ? "Consumo atualizado" : "Consumo adicionado");
-    if (!editing) reset();
-    onDone?.();
+    try {
+      await upsertExpense({
+        id: editing?.id,
+        name: name.trim(),
+        value: num,
+        date: format(date, "yyyy-MM-dd"),
+        note: note || undefined,
+      });
+      toast.success(editing ? "Consumo atualizado" : "Consumo adicionado");
+      if (!editing) reset();
+      onDone?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
   };
+
 
   return (
     <form onSubmit={submit} className="glass-card rounded-3xl p-5 space-y-4">

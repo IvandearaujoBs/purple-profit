@@ -24,23 +24,28 @@ export function CommissionForm({ editing, onDone, defaultDate }: Props) {
     setValue(""); setNote(""); setDate(new Date());
   };
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const num = Number(value.replace(",", "."));
     if (!num || num <= 0) {
       toast.error("Informe um valor válido");
       return;
     }
-    upsert({
-      id: editing?.id,
-      value: num,
-      date: format(date, "yyyy-MM-dd"),
-      note: note || undefined,
-    });
-    toast.success(editing ? "Comissão atualizada" : "Comissão adicionada");
-    if (!editing) reset();
-    onDone?.();
+    try {
+      await upsert({
+        id: editing?.id,
+        value: num,
+        date: format(date, "yyyy-MM-dd"),
+        note: note || undefined,
+      });
+      toast.success(editing ? "Comissão atualizada" : "Comissão adicionada");
+      if (!editing) reset();
+      onDone?.();
+    } catch (err) {
+      toast.error((err as Error).message);
+    }
   };
+
 
   return (
     <form onSubmit={submit} className="glass-card rounded-3xl p-5 space-y-4">

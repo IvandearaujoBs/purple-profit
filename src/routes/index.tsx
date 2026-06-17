@@ -59,10 +59,11 @@ function Dashboard() {
             <p className="text-xs text-muted-foreground truncate">Olá, {user}</p>
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={logout} className="rounded-xl shrink-0">
+        <Button variant="outline" size="sm" onClick={() => { void logout(); }} className="rounded-xl shrink-0">
           <LogOut className="h-4 w-4 sm:mr-1.5" />
           <span className="hidden sm:inline">Sair</span>
         </Button>
+
       </header>
 
       <div className="mb-5">
@@ -120,8 +121,9 @@ function Dashboard() {
       </Tabs>
 
       <footer className="mt-10 text-center text-xs text-muted-foreground">
-        Dados salvos localmente · pronto para integração com Supabase
+        Seus dados ficam salvos com segurança na sua conta
       </footer>
+
     </div>
   );
 }

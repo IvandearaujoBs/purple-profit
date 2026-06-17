@@ -73,7 +73,7 @@ export function CommissionCalendar({ list, month, onMonthChange }: Props) {
                     <div className="flex-1 min-w-0">
                       <p className="font-display font-bold">{fmtBRL(c.value)}</p>
                       <p className="text-xs text-muted-foreground truncate">
-                        {[c.category, c.client, c.note].filter(Boolean).join(" · ") || "—"}
+                        {c.note || "—"}
                       </p>
                     </div>
                     <Button size="icon" variant="ghost" onClick={() => { setEditing(c); setShowForm(true); }}>
