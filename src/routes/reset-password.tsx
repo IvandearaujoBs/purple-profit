@@ -5,8 +5,7 @@ import { KeyRound, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/integrations/supabase/client";
-import { updatePassword, initAuth } from "@/lib/auth";
+import { getPendingResetEmail, updatePassword, initAuth, getSession } from "@/lib/auth";
 
 export const Route = createFileRoute("/reset-password")({
   head: () => ({
@@ -28,19 +27,9 @@ function ResetPassword() {
 
   useEffect(() => {
     initAuth();
-    // Supabase processes the recovery token from the URL automatically and
-    // emits a PASSWORD_RECOVERY event with a temporary session.
-    const sub = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY" || session) {
-        setHasSession(true);
-      }
-      setReady(true);
-    });
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setHasSession(true);
-      setReady(true);
-    });
-    return () => { sub.data.subscription.unsubscribe(); };
+    const pendingResetEmail = getPendingResetEmail() ?? getSession();
+    setHasSession(Boolean(pendingResetEmail));
+    setReady(true);
   }, []);
 
   const submit = async (e: React.FormEvent) => {
@@ -50,7 +39,6 @@ function ResetPassword() {
     try {
       await updatePassword(password);
       toast.success("Senha redefinida com sucesso!");
-      await supabase.auth.signOut();
       navigate({ to: "/" });
     } catch (err) {
       toast.error((err as Error).message);

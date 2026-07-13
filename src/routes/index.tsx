@@ -121,7 +121,7 @@ function Dashboard() {
       </Tabs>
 
       <footer className="mt-10 text-center text-xs text-muted-foreground">
-        Seus dados ficam salvos com segurança na sua conta
+        Seus dados ficam salvos localmente no navegador e podem ser migrados para um banco SQL depois.
       </footer>
 
     </div>

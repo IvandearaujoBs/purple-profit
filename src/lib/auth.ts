@@ -1,7 +1,16 @@
-import { supabase } from "@/integrations/supabase/client";
+const AUTH_SESSION_KEY = "commission-pro:auth:session";
+const AUTH_USERS_KEY = "commission-pro:auth:users";
+const AUTH_RESET_KEY = "commission-pro:auth:pending-reset";
 
 let currentEmail: string | null = null;
 let initialized = false;
+
+type StoredUser = {
+  email: string;
+  passwordHash: string;
+  createdAt: string;
+  updatedAt: string;
+};
 
 function emit() {
   if (typeof window !== "undefined") {
@@ -9,87 +18,150 @@ function emit() {
   }
 }
 
-async function refresh(): Promise<string | null> {
-  const { data } = await supabase.auth.getSession();
-  const email = data.session?.user?.email ?? null;
-  if (email !== currentEmail) {
-    currentEmail = email;
-    emit();
+function getStorage() {
+  if (typeof window === "undefined") return null;
+  return window.localStorage;
+}
+
+function readStoredSession(): string | null {
+  return getStorage()?.getItem(AUTH_SESSION_KEY) ?? null;
+}
+
+function writeStoredSession(email: string | null) {
+  const storage = getStorage();
+  if (!storage) return;
+  if (email) {
+    storage.setItem(AUTH_SESSION_KEY, email);
+  } else {
+    storage.removeItem(AUTH_SESSION_KEY);
   }
-  return currentEmail;
+}
+
+function readUsers(): Record<string, StoredUser> {
+  const storage = getStorage();
+  if (!storage) return {};
+  const raw = storage.getItem(AUTH_USERS_KEY);
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) as Record<string, StoredUser>;
+  } catch {
+    return {};
+  }
+}
+
+function writeUsers(users: Record<string, StoredUser>) {
+  const storage = getStorage();
+  if (!storage) return;
+  storage.setItem(AUTH_USERS_KEY, JSON.stringify(users));
+}
+
+function readPendingResetEmail(): string | null {
+  return getStorage()?.getItem(AUTH_RESET_KEY) ?? null;
+}
+
+function writePendingResetEmail(email: string | null) {
+  const storage = getStorage();
+  if (!storage) return;
+  if (email) {
+    storage.setItem(AUTH_RESET_KEY, email);
+  } else {
+    storage.removeItem(AUTH_RESET_KEY);
+  }
+}
+
+async function hashPassword(password: string) {
+  const data = new TextEncoder().encode(password);
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function verifyPassword(password: string, passwordHash: string) {
+  return (await hashPassword(password)) === passwordHash;
 }
 
 export function initAuth() {
   if (initialized || typeof window === "undefined") return;
   initialized = true;
-  void refresh();
-  supabase.auth.onAuthStateChange((_event, session) => {
-    const email = session?.user?.email ?? null;
-    if (email !== currentEmail) {
-      currentEmail = email;
-      emit();
-    }
-  });
+  currentEmail = readStoredSession();
+  emit();
 }
 
 export function getSession(): string | null {
-  return currentEmail;
+  return currentEmail ?? readStoredSession();
 }
 
 export async function getUserId(): Promise<string | null> {
-  const { data } = await supabase.auth.getSession();
-  return data.session?.user?.id ?? null;
+  return getSession();
 }
 
 export async function login(email: string, password: string) {
-  const { error } = await supabase.auth.signInWithPassword({
-    email: email.trim().toLowerCase(),
-    password,
-  });
-  if (error) {
-    if (error.message.toLowerCase().includes("invalid")) {
-      throw new Error("Email ou senha inválidos");
-    }
-    throw new Error(error.message);
-  }
-  await refresh();
+  const trimmed = email.trim().toLowerCase();
+  const users = readUsers();
+  const user = users[trimmed];
+  if (!user) throw new Error("Email ou senha inválidos");
+  const isValid = await verifyPassword(password, user.passwordHash);
+  if (!isValid) throw new Error("Email ou senha inválidos");
+  currentEmail = trimmed;
+  writeStoredSession(trimmed);
+  writePendingResetEmail(null);
+  emit();
 }
 
 export async function signup(email: string, password: string) {
   const trimmed = email.trim().toLowerCase();
   if (!trimmed || !password) throw new Error("Preencha email e senha");
   if (password.length < 6) throw new Error("A senha deve ter no mínimo 6 caracteres");
-  const { error } = await supabase.auth.signUp({
+  const users = readUsers();
+  if (users[trimmed]) throw new Error("Este email já está cadastrado");
+  const passwordHash = await hashPassword(password);
+  users[trimmed] = {
     email: trimmed,
-    password,
-    options: { emailRedirectTo: window.location.origin },
-  });
-  if (error) {
-    if (error.message.toLowerCase().includes("registered")) {
-      throw new Error("Este email já está cadastrado");
-    }
-    throw new Error(error.message);
-  }
-  await refresh();
+    passwordHash,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  writeUsers(users);
+  currentEmail = trimmed;
+  writeStoredSession(trimmed);
+  writePendingResetEmail(null);
+  emit();
 }
 
 export async function logout() {
-  await supabase.auth.signOut();
   currentEmail = null;
+  writeStoredSession(null);
+  writePendingResetEmail(null);
   emit();
 }
 
 export async function sendPasswordReset(email: string) {
   const trimmed = email.trim().toLowerCase();
   if (!trimmed) throw new Error("Informe seu email");
-  const { error } = await supabase.auth.resetPasswordForEmail(trimmed, {
-    redirectTo: `${window.location.origin}/reset-password`,
-  });
-  if (error) throw new Error(error.message);
+  const users = readUsers();
+  if (!users[trimmed]) throw new Error("Não existe uma conta para este email");
+  writePendingResetEmail(trimmed);
 }
 
 export async function updatePassword(newPassword: string) {
   if (newPassword.length < 6) throw new Error("A senha deve ter no mínimo 6 caracteres");
-  const { error } = await supabase.auth.updateUser({ password: newPassword });
-  if (error) throw new Error(error.message);
+  const target = currentEmail ?? readPendingResetEmail();
+  if (!target) throw new Error("Nenhuma conta ativa para redefinir a senha");
+  const users = readUsers();
+  if (!users[target]) throw new Error("Conta não encontrada");
+  users[target] = {
+    ...users[target],
+    passwordHash: await hashPassword(newPassword),
+    updatedAt: new Date().toISOString(),
+  };
+  writeUsers(users);
+  currentEmail = target;
+  writeStoredSession(target);
+  writePendingResetEmail(null);
+  emit();
+}
+
+export function getPendingResetEmail() {
+  return readPendingResetEmail();
 }

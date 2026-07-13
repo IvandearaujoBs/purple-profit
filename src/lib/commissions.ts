@@ -4,7 +4,6 @@ import {
   differenceInCalendarWeeks, isWithinInterval,
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { supabase } from "@/integrations/supabase/client";
 import { getSession, getUserId } from "@/lib/auth";
 
 export type Commission = {
@@ -25,14 +24,44 @@ function emit() {
   }
 }
 
+function getStorage() {
+  if (typeof window === "undefined") return null;
+  return window.localStorage;
+}
+
+function getStorageKey(email: string | null) {
+  return email ? `commission-pro:data:${email}:commissions` : null;
+}
+
+function readItems(email: string | null): Commission[] {
+  const storage = getStorage();
+  const key = getStorageKey(email);
+  if (!storage || !key) return [];
+  const raw = storage.getItem(key);
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as Commission[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeItems(email: string | null, items: Commission[]) {
+  const storage = getStorage();
+  const key = getStorageKey(email);
+  if (!storage || !key) return;
+  storage.setItem(key, JSON.stringify(items));
+}
+
 function mapRow(r: any): Commission {
   return {
     id: r.id,
     date: r.date,
     value: Number(r.value),
     note: r.note ?? undefined,
-    createdAt: r.created_at,
-    updatedAt: r.updated_at,
+    createdAt: r.created_at ?? r.createdAt ?? new Date().toISOString(),
+    updatedAt: r.updated_at ?? r.updatedAt ?? new Date().toISOString(),
   };
 }
 
@@ -42,16 +71,16 @@ export function loadAll(): Commission[] {
 
 export async function fetchAll(): Promise<Commission[]> {
   const email = getSession();
-  if (!email) { cache = []; cacheUser = null; emit(); return cache; }
-  if (cacheUser !== email) cache = [];
+  if (!email) {
+    cache = [];
+    cacheUser = null;
+    emit();
+    return cache;
+  }
+  if (cacheUser !== email) cache = readItems(email);
   cacheUser = email;
   await migrateLegacyIfNeeded();
-  const { data, error } = await supabase
-    .from("commissions")
-    .select("*")
-    .order("date", { ascending: false });
-  if (error) { console.error(error); return cache; }
-  cache = (data ?? []).map(mapRow);
+  cache = readItems(email);
   emit();
   return cache;
 }
@@ -61,31 +90,37 @@ export async function upsert(
 ) {
   const uid = await getUserId();
   if (!uid) throw new Error("Não autenticado");
+  const now = new Date().toISOString();
   if (item.id) {
-    const { data, error } = await supabase
-      .from("commissions")
-      .update({ date: item.date, value: item.value, note: item.note ?? null })
-      .eq("id", item.id)
-      .select()
-      .single();
-    if (error) throw error;
-    cache = cache.map((c) => (c.id === item.id ? mapRow(data) : c));
+    const existing = cache.find((c) => c.id === item.id);
+    const updated: Commission = {
+      id: item.id,
+      date: item.date,
+      value: item.value,
+      note: item.note ?? undefined,
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+    cache = cache.map((c) => (c.id === item.id ? updated : c));
   } else {
-    const { data, error } = await supabase
-      .from("commissions")
-      .insert({ user_id: uid, date: item.date, value: item.value, note: item.note ?? null })
-      .select()
-      .single();
-    if (error) throw error;
-    cache = [mapRow(data), ...cache];
+    const created: Commission = {
+      id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      date: item.date,
+      value: item.value,
+      note: item.note ?? undefined,
+      createdAt: now,
+      updatedAt: now,
+    };
+    cache = [created, ...cache];
   }
+  writeItems(uid, cache);
   emit();
 }
 
 export async function remove(id: string) {
-  const { error } = await supabase.from("commissions").delete().eq("id", id);
-  if (error) throw error;
   cache = cache.filter((c) => c.id !== id);
+  const uid = await getUserId();
+  if (uid) writeItems(uid, cache);
   emit();
 }
 
@@ -97,10 +132,9 @@ async function migrateLegacyIfNeeded() {
   if (localStorage.getItem(flag)) return;
   const uid = await getUserId();
   if (!uid) return;
-  // Try all known local keys for this email + global legacy key
   const keys = [`commission-pro:u:${email}:v1`, "commission-pro:v1"];
   const seen = new Set<string>();
-  const toInsert: any[] = [];
+  const toInsert: Commission[] = [];
   for (const k of keys) {
     const raw = localStorage.getItem(k);
     if (!raw) continue;
@@ -110,13 +144,22 @@ async function migrateLegacyIfNeeded() {
         const sig = `${it.date}|${it.value}|${it.note ?? ""}`;
         if (seen.has(sig)) continue;
         seen.add(sig);
-        toInsert.push({ user_id: uid, date: it.date, value: it.value, note: it.note ?? null });
+        toInsert.push(mapRow({
+          id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          date: it.date,
+          value: it.value,
+          note: it.note ?? null,
+          created_at: it.createdAt ?? new Date().toISOString(),
+          updated_at: it.updatedAt ?? new Date().toISOString(),
+        }));
       }
-    } catch { /* ignore */ }
+    } catch {
+      // ignore
+    }
   }
   if (toInsert.length) {
-    const { error } = await supabase.from("commissions").insert(toInsert);
-    if (error) { console.error("Migração comissões:", error); return; }
+    cache = [...toInsert, ...cache.filter((item) => !toInsert.some((candidate) => candidate.id === item.id))];
+    writeItems(uid, cache);
   }
   localStorage.setItem(flag, "1");
 }
