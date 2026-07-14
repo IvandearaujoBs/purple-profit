@@ -2,7 +2,7 @@ import { TrendingDown, TrendingUp, CalendarDays, Trophy, Hash, Coins, ShoppingBa
 import { fmtBRL, fmtDate, monthStats, prevMonthDelta, type Commission } from "@/lib/commissions";
 import { expensesMonthTotal, type Expense } from "@/lib/expenses";
 
-type Props = { list: Commission[]; expenses?: Expense[]; ref: Date; today: Date };
+type Props = { list: Commission[]; expenses?: Expense[]; refDate: Date; today: Date };
 
 function Stat({
   icon: Icon, label, value, accent, sub,
@@ -21,13 +21,13 @@ function Stat({
   );
 }
 
-export function SummaryCards({ list, expenses = [], ref, today }: Props) {
-  const s = monthStats(list, ref);
+export function SummaryCards({ list, expenses = [], refDate, today }: Props) {
+  const s = monthStats(list, refDate);
   const todayKey = today.toISOString().slice(0, 10);
   const todayTotal = list.filter((c) => c.date === todayKey).reduce((a, c) => a + c.value, 0);
-  const delta = prevMonthDelta(list, ref);
+  const delta = prevMonthDelta(list, refDate);
   const up = delta >= 0;
-  const consumo = expensesMonthTotal(expenses, ref);
+  const consumo = expensesMonthTotal(expenses, refDate);
   const liquido = s.total - consumo;
 
   return (
