@@ -1,7 +1,7 @@
 import { weeklyBreakdown, fmtBRL, fmtDate, type Commission } from "@/lib/commissions";
 
-export function WeeklyBreakdown({ list, ref }: { list: Commission[]; ref: Date }) {
-  const weeks = weeklyBreakdown(list, ref);
+export function WeeklyBreakdown({ list, refDate }: { list: Commission[]; refDate: Date }) {
+  const weeks = weeklyBreakdown(list, refDate);
   return (
     <div className="glass-card rounded-3xl p-5">
       <h3 className="mb-3 font-display text-base font-semibold">Comissões por semana</h3>

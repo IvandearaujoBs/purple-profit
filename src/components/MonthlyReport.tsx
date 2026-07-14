@@ -5,10 +5,10 @@ import autoTable from "jspdf-autotable";
 import { Button } from "@/components/ui/button";
 import { fmtBRL, fmtDate, fmtMonth, inMonth, monthStats, type Commission } from "@/lib/commissions";
 
-export function MonthlyReport({ list, ref }: { list: Commission[]; ref: Date }) {
-  const s = monthStats(list, ref);
-  const items = inMonth(list, ref).sort((a, b) => (a.date < b.date ? -1 : 1));
-  const monthLabel = fmtMonth(ref);
+export function MonthlyReport({ list, refDate }: { list: Commission[]; refDate: Date }) {
+  const s = monthStats(list, refDate);
+  const items = inMonth(list, refDate).sort((a, b) => (a.date < b.date ? -1 : 1));
+  const monthLabel = fmtMonth(refDate);
 
   const exportCSV = () => {
     const rows = [
