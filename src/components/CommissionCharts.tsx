@@ -12,9 +12,9 @@ const tooltipStyle = {
   fontSize: 12,
 };
 
-export function CommissionCharts({ list, ref }: { list: Commission[]; ref: Date }) {
-  const daily = dailySeries(list, ref);
-  const cum = cumulativeSeries(list, ref);
+export function CommissionCharts({ list, refDate }: { list: Commission[]; refDate: Date }) {
+  const daily = dailySeries(list, refDate);
+  const cum = cumulativeSeries(list, refDate);
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

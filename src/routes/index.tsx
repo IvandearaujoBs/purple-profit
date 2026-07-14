@@ -90,11 +90,11 @@ function Dashboard() {
         </TabsList>
 
         <TabsContent value="dashboard" className="space-y-5">
-          <SummaryCards list={list} expenses={expenses} ref={month} today={today} />
+          <SummaryCards list={list} expenses={expenses} refDate={month} today={today} />
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_360px]">
             <div className="space-y-5">
-              <CommissionCharts list={list} ref={month} />
-              <WeeklyBreakdown list={list} ref={month} />
+              <CommissionCharts list={list} refDate={month} />
+              <WeeklyBreakdown list={list} refDate={month} />
             </div>
             <CommissionForm defaultDate={today} />
           </div>
@@ -116,7 +116,7 @@ function Dashboard() {
         </TabsContent>
 
         <TabsContent value="relatorio">
-          <MonthlyReport list={list} ref={month} />
+          <MonthlyReport list={list} refDate={month} />
         </TabsContent>
       </Tabs>
 
